@@ -1,88 +1,67 @@
-name: Windows Cloud PC - Anydesk (Otimizado)
+name: Windows Cloud PC - RDP Ngrok
 
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    name: Iniciar Construção...
+    name: Start Windows RDP
     runs-on: windows-latest
-    timeout-minutes: 10080
+    timeout-minutes: 360
 
     steps:
-      - name: Baixar e Instalar AnyDesk
+      - name: Ativar RDP no Windows
         shell: powershell
         run: |
-          $installer = "$env:TEMP\AnyDesk.exe"
-          Write-Host "Baixando AnyDesk..."
-          Invoke-WebRequest -Uri "https://download.anydesk.com/AnyDesk.exe" -OutFile $installer
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          Write-Host "RDP ativado com sucesso!"
 
-          Write-Host "Instalando AnyDesk..."
-          Start-Process -FilePath $installer -ArgumentList '--install "C:\Program Files (x86)\AnyDesk" --start-with-win --silent' -Wait
-          Start-Sleep -Seconds 10
-
-      - name: Configurar Senha e Caminho
+      - name: Definir Senha do Administrador
         shell: powershell
         run: |
-          $paths = @(
-            "C:\Program Files (x86)\AnyDesk\AnyDesk.exe",
-            "C:\Program Files\AnyDesk\AnyDesk.exe"
-          )
-          $anydesk = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1
+          $user = "runneradmin"
+          $pass = "runneradmin1"
+          $cmd = "$user $pass"
+          net user $cmd
+          Write-Host "Senha do usuário definida para: Anydeskgem152"
 
-          if (!$anydesk) {
-            throw "AnyDesk.exe não encontrado após a instalação."
-          }
-
-          Write-Host "Definindo senha permanente..."
-          echo "Anydeskgem152" | & "$anydesk" --set-password
-
-          "ANYDESK_PATH=$anydesk" >> $env:GITHUB_ENV
-          Write-Host "AnyDesk configurado em: $anydesk"
-
-      - name: Iniciar AnyDesk e Obter ID
+      - name: Instalar e Iniciar Ngrok
         shell: powershell
         run: |
-          Write-Host "Iniciando AnyDesk..."
-          Start-Process -FilePath "$env:ANYDESK_PATH"
-          Start-Sleep -Seconds 10
+          Write-Host "Baixando Ngrok..."
+          $ngrokZip = "$env:TEMP\ngrok.zip"
+          Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip" -OutFile $ngrokZip
+          Expand-Archive -Path $ngrokZip -DestinationPath "C:\ProgramData" -Force
 
-          $configPaths = @(
-            "$env:APPDATA\AnyDesk\system.conf",
-            "C:\ProgramData\AnyDesk\system.conf"
-          )
-          $id = $null
+          # Se você tiver um authtoken gratuito do Ngrok, descomente a linha abaixo e cole o seu token entre aspas:
+          # C:\ProgramData\ngrok.exe config add-authtoken SEU_TOKEN_AQUI
 
-          foreach ($config in $configPaths) {
-            if (Test-Path $config) {
-              $line = Get-Content $config -ErrorAction SilentlyContinue | Select-String "^ad\.anynet\.id=" | Select-Object -First 1
-              if ($line) {
-                $id = ($line.Line -split "=", 2)[1].Trim()
-                break
-              }
-            }
-          }
+          Write-Host "Abrindo túnel TCP na porta padrão do RDP (3389)..."
+          Start-Process -FilePath "C:\ProgramData\ngrok.exe" -ArgumentList "tcp 3389" -NoNewWindow
+          Start-Sleep -Seconds 5
 
-          if ([string]::IsNullOrWhiteSpace($id)) {
-            $result = & "$env:ANYDESK_PATH" --get-id 2>$null
-            if ($result) { $id = $result.Trim() }
-          }
-
-          Write-Host ""
-          Write-Host "========================================"
-          Write-Host "          ANYDESK ID: $id"
-          Write-Host "          SENHA: Anydeskgem152"
-          Write-Host "========================================"
-          Write-Host ""
-
-      - name: Monitorar e Manter Ativo
+      - name: Obter Endereço de Acesso RDP
         shell: powershell
         run: |
-          while ($true) {
-            $process = Get-Process -Name "AnyDesk" -ErrorAction SilentlyContinue
-            if (-not $process) {
-              Write-Host "AnyDesk parou, reiniciando..."
-              Start-Process -FilePath "$env:ANYDESK_PATH"
-            }
-            Start-Sleep -Seconds 300
+          try {
+            $response = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels" -ErrorAction Stop
+            $tunnelUrl = $response.tunnels[0].public_url
+            Write-Host ""
+            Write-Host "=================================================="
+            Write-Host " DADOS PARA CONEXÃO RDP:"
+            Write-Host " Endereço: $tunnelUrl"
+            Write-Host " Usuário: runneradmin"
+            Write-Host " Senha: Anydeskgem152"
+            Write-Host "=================================================="
+            Write-Host ""
+          } catch {
+            Write-Host "Não foi possível pegar a URL via API, verifique o painel do Ngrok se necessário."
           }
+
+      - name: Manter Runner Ativo
+        shell: powershell
+        run: |
+          Write-Host "PC na nuvem pronto e ativo por 6 horas."
+          Start-Sleep -Seconds 21000
