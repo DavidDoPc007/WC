@@ -21,9 +21,9 @@ jobs:
       - name: Definir Senha do Administrador
         shell: powershell
         run: |
-          # Altera diretamente a senha do usuário runneradmin para a sua senha
-          net user runneradmin Anydeskgem152
-          Write-Host "Senha do usuário definida com sucesso para: Anydeskgem152"
+          $account = [adsis] "WinNT://$env:COMPUTERNAME/runneradmin,user"
+          $account.SetPassword("Anydeskgem152")
+          Write-Host "Senha alterada com sucesso para: Anydeskgem152"
 
       - name: Instalar e Iniciar Ngrok
         shell: powershell
