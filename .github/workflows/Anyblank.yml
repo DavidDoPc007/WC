@@ -10,46 +10,79 @@ jobs:
     timeout-minutes: 10080
 
     steps:
-      - name: Baixando e Instalando o Essentials
+      - name: Baixar e Instalar AnyDesk
         shell: powershell
         run: |
-          Invoke-WebRequest -Uri "https://www.dropbox.com/scl/fi/7eiczvgil84czu55dxep3/Downloads.bat?rlkey=wzdc1wxjsph2b7r0atplmdz3p&dl=1" -OutFile "Downloads.bat"
-          cmd /c Downloads.bat
+          $installer = "$env:TEMP\AnyDesk.exe"
+          Write-Host "Baixando AnyDesk..."
+          Invoke-WebRequest -Uri "https://download.anydesk.com/AnyDesk.exe" -OutFile $installer
 
-      - name: Entrar no AnyDesk
+          Write-Host "Instalando AnyDesk..."
+          Start-Process -FilePath $installer -ArgumentList '--install "C:\Program Files (x86)\AnyDesk" --start-with-win --silent' -Wait
+          Start-Sleep -Seconds 10
+
+      - name: Configurar Senha e Caminho
         shell: powershell
         run: |
-          if (Test-Path "start.bat") {
-            cmd /c start.bat
-          } elseif (Test-Path "iniciar.bat") {
-            cmd /c iniciar.bat
-          } else {
-            Write-Host "Arquivo de inicializacao não encontrado. Verifique a configuração."
+          $paths = @(
+            "C:\Program Files (x86)\AnyDesk\AnyDesk.exe",
+            "C:\Program Files\AnyDesk\AnyDesk.exe"
+          )
+          $anydesk = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+          if (!$anydesk) {
+            throw "AnyDesk.exe não encontrado após a instalação."
           }
 
-      - name: Monitorar e reiniciar o AnyDesk, se necessário
+          Write-Host "Definindo senha permanente..."
+          echo "Anydeskgem152" | & "$anydesk" --set-password
+
+          "ANYDESK_PATH=$anydesk" >> $env:GITHUB_ENV
+          Write-Host "AnyDesk configurado em: $anydesk"
+
+      - name: Iniciar AnyDesk e Obter ID
+        shell: powershell
+        run: |
+          Write-Host "Iniciando AnyDesk..."
+          Start-Process -FilePath "$env:ANYDESK_PATH"
+          Start-Sleep -Seconds 10
+
+          $configPaths = @(
+            "$env:APPDATA\AnyDesk\system.conf",
+            "C:\ProgramData\AnyDesk\system.conf"
+          )
+          $id = $null
+
+          foreach ($config in $configPaths) {
+            if (Test-Path $config) {
+              $line = Get-Content $config -ErrorAction SilentlyContinue | Select-String "^ad\.anynet\.id=" | Select-Object -First 1
+              if ($line) {
+                $id = ($line.Line -split "=", 2)[1].Trim()
+                break
+              }
+            }
+          }
+
+          if ([string]::IsNullOrWhiteSpace($id)) {
+            $result = & "$env:ANYDESK_PATH" --get-id 2>$null
+            if ($result) { $id = $result.Trim() }
+          }
+
+          Write-Host ""
+          Write-Host "========================================"
+          Write-Host "          ANYDESK ID: $id"
+          Write-Host "          SENHA: Anydeskgem152"
+          Write-Host "========================================"
+          Write-Host ""
+
+      - name: Monitorar e Manter Ativo
         shell: powershell
         run: |
           while ($true) {
             $process = Get-Process -Name "AnyDesk" -ErrorAction SilentlyContinue
             if (-not $process) {
-              Write-Host "AnyDesk não está rodando, reiniciando..."
-              if (Test-Path "start.bat") { cmd /c start.bat }
-              elseif (Test-Path "iniciar.bat") { cmd /c iniciar.bat }
+              Write-Host "AnyDesk parou, reiniciando..."
+              Start-Process -FilePath "$env:ANYDESK_PATH"
             }
             Start-Sleep -Seconds 300
           }
-
-      - name: Contador de Tempo (Tarefa de Longa Duração)
-        shell: powershell
-        run: |
-          Start-Sleep -Seconds 604800
-
-      - name: Limpar arquivos temporários
-        if: success()
-        shell: powershell
-        run: |
-          if (Test-Path "Downloads.bat") {
-            Remove-Item Downloads.bat -Force
-          }
-          Write-Host "Limpeza completa."
