@@ -1,0 +1,44 @@
+name: Windows Cloud PC - RustDesk
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Start Windows (RustDesk)
+    runs-on: windows-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Baixar e Instalar RustDesk
+        shell: powershell
+        run: |
+          $installer = "$env:TEMP\rustdesk.exe"
+          Write-Host "Baixando RustDesk..."
+          Invoke-WebRequest -Uri "https://github.com/rustdesk/rustdesk/releases/download/1.3.1/rustdesk-1.3.1-x86_64.exe" -OutFile $installer
+          
+          Write-Host "Instalando..."
+          Start-Process -FilePath $installer -ArgumentList "--silent-install" -Wait
+          Start-Sleep -Seconds 5
+
+      - name: Configurar Senha e Obter ID
+        shell: powershell
+        run: |
+          $rustdesk = "C:\Program Files\RustDesk\rustdesk.exe"
+          & "$rustdesk" --password Anydeskgem152
+          Start-Sleep -Seconds 3
+          
+          $id = (& "$rustdesk" --get-id).Trim()
+
+          Write-Host ""
+          Write-Host "========================================"
+          Write-Host "          RUSTDESK ID: $id"
+          Write-Host "          SENHA: Anydeskgem152"
+          Write-Host "========================================"
+          Write-Host ""
+
+      - name: Manter Runner Ativo
+        shell: powershell
+        run: |
+          Write-Host "Runner ativo."
+          Start-Sleep -Seconds 21000
