@@ -35,14 +35,26 @@ jobs:
 
           Write-Host "Abrindo túnel TCP na porta padrão do RDP (3389)..."
           Start-Process -FilePath "C:\ProgramData\ngrok.exe" -ArgumentList "tcp 3389" -NoNewWindow
-          Start-Sleep -Seconds 5
+          
+          # Pausa maior para garantir que o Ngrok iniciou o servidor web local da API
+          Start-Sleep -Seconds 8
 
       - name: Obter Endereço de Acesso RDP
         shell: powershell
         run: |
-          try {
-            $response = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels" -ErrorAction Stop
-            $tunnelUrl = $response.tunnels[0].public_url
+          $tunnelUrl = $null
+          for ($i=1; $i -le 5; $i++) {
+            try {
+              $response = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels" -ErrorAction Stop
+              $tunnelUrl = $response.tunnels[0].public_url
+              if ($tunnelUrl) { break }
+            } catch {
+              Write-Host "Tentativa $i: Aguardando API do Ngrok..."
+              Start-Sleep -Seconds 3
+            }
+          }
+
+          if ($tunnelUrl) {
             Write-Host ""
             Write-Host "=================================================="
             Write-Host " DADOS PARA CONEXÃO RDP:"
@@ -51,8 +63,8 @@ jobs:
             Write-Host " Senha: Anydeskgem152"
             Write-Host "=================================================="
             Write-Host ""
-          } catch {
-            Write-Host "Não foi possível pegar a URL via API, verifique o painel do Ngrok se necessário."
+          } else {
+            Write-Host "Erro: Não foi possível obter a URL do Ngrok."
           }
 
       - name: Manter Runner Ativo
