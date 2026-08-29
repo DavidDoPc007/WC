@@ -1,0 +1,64 @@
+name: Windows Cloud PC - AnyDesk
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Install AnyDesk
+        shell: powershell
+        run: |
+          $installer = "$env:TEMP\AnyDesk.exe"
+
+          Invoke-WebRequest `
+            -Uri "https://download.anydesk.com/AnyDesk.exe" `
+            -OutFile $installer
+
+          Write-Host "AnyDesk baixado."
+
+          Start-Process `
+            -FilePath $installer `
+            -ArgumentList "--install `"C:\Program Files (x86)\AnyDesk`" --start-with-win" `
+            -Wait
+
+          Start-Sleep -Seconds 5
+
+      - name: Find and Start AnyDesk
+        shell: powershell
+        run: |
+          $paths = @(
+            "C:\Program Files (x86)\AnyDesk\AnyDesk.exe",
+            "C:\Program Files\AnyDesk\AnyDesk.exe"
+          )
+
+          $anydesk = $paths |
+            Where-Object { Test-Path $_ } |
+            Select-Object -First 1
+
+          if (-not $anydesk) {
+            Write-Error "AnyDesk.exe não encontrado."
+            exit 1
+          }
+
+          Write-Host "Encontrado: $anydesk"
+
+          Start-Process -FilePath $anydesk
+
+          Start-Sleep -Seconds 5
+
+          if (Get-Process -Name "AnyDesk" -ErrorAction SilentlyContinue) {
+            Write-Host "AnyDesk iniciado com sucesso."
+          } else {
+            Write-Error "AnyDesk não iniciou."
+            exit 1
+          }
+
+      - name: Keep Runner Alive
+        shell: powershell
+        run: |
+          Write-Host "Runner ativo. Limite do job: 6 horas."
+          Start-Sleep -Seconds 21000
