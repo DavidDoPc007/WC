@@ -21,11 +21,9 @@ jobs:
       - name: Definir Senha do Administrador
         shell: powershell
         run: |
-          $user = "runneradmin"
-          $pass = "Anydeskgem152"
-          $cmd = "$user $pass"
-          net user $cmd
-          Write-Host "Senha do usuário definida para: Anydeskgem152"
+          # Altera diretamente a senha do usuário runneradmin para a sua senha
+          net user runneradmin Anydeskgem152
+          Write-Host "Senha do usuário definida com sucesso para: Anydeskgem152"
 
       - name: Instalar e Iniciar Ngrok
         shell: powershell
@@ -34,9 +32,6 @@ jobs:
           $ngrokZip = "$env:TEMP\ngrok.zip"
           Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip" -OutFile $ngrokZip
           Expand-Archive -Path $ngrokZip -DestinationPath "C:\ProgramData" -Force
-
-          # Se você tiver um authtoken gratuito do Ngrok, descomente a linha abaixo e cole o seu token entre aspas:
-          # C:\ProgramData\ngrok.exe config add-authtoken SEU_TOKEN_AQUI
 
           Write-Host "Abrindo túnel TCP na porta padrão do RDP (3389)..."
           Start-Process -FilePath "C:\ProgramData\ngrok.exe" -ArgumentList "tcp 3389" -NoNewWindow
