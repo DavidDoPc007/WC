@@ -1,0 +1,94 @@
+name: Windows Cloud PC - RustDesk
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Start Windows (RustDesk)
+    runs-on: windows-latest
+    timeout-minutes: 360
+
+    steps:
+
+      - name: Install RustDesk
+        shell: powershell
+        run: |
+          $installer = "$env:TEMP\rustdesk-installer.exe"
+
+          Write-Host "Baixando RustDesk..."
+          Invoke-WebRequest `
+            -Uri "https://github.com/rustdesk/rustdesk/releases/download/1.3.1/rustdesk-1.3.1-x86_64.exe" `
+            -OutFile $installer
+
+          if (!(Test-Path $installer)) {
+            throw "Falha ao baixar o RustDesk."
+          }
+
+          Write-Host "Instalando RustDesk..."
+          Start-Process -FilePath $installer -ArgumentList "--silent" -Wait
+          
+          Start-Sleep -Seconds 10
+
+      - name: Configure Password and Service
+        shell: powershell
+        run: |
+          $rustdeskPath = "C:\Program Files\RustDesk\rustdesk.exe"
+          
+          if (!(Test-Path $rustdeskPath)) {
+            $rustdeskPath = "$env:ProgramFiles\RustDesk\rustdesk.exe"
+          }
+
+          if (!(Test-Path $rustdeskPath)) {
+            throw "RustDesk.exe não encontrado."
+          }
+
+          Write-Host "Configurando senha permanente..."
+          & "$rustdeskPath" --password Anydeskgem152
+
+          Write-Host "RUSTDESK_PATH=$rustdeskPath" >> $env:GITHUB_ENV
+
+      - name: Get RustDesk ID
+        shell: powershell
+        run: |
+          Write-Host "Obtendo ID do RustDesk..."
+          
+          $idFile = "$env:APPDATA\RustDesk\config\rustdesk.toml"
+          $id = $null
+
+          for ($i=0; $i -lt 10; $i++) {
+            if (Test-Path $idFile) {
+              $content = Get-Content $idFile -Raw
+              if ($content -match 'id\s*=\s*"([^"]+)"') {
+                $id = $matches[1]
+                break
+              }
+            }
+            Start-Sleep -Seconds 2
+          }
+
+          if ([string]::IsNullOrWhiteSpace($id)) {
+            # Tenta via linha de comando se o arquivo não responder
+            $result = & "$env:RUSTDESK_PATH" --get-id 2>$null
+            if ($result) {
+              $id = $result.Trim()
+            }
+          }
+
+          if ([string]::IsNullOrWhiteSpace($id)) {
+            throw "Não foi possível obter o ID do RustDesk."
+          }
+
+          Write-Host ""
+          Write-Host "========================================"
+          Write-Host "         RUSTDESK ID"
+          Write-Host "========================================"
+          Write-Host $id
+          Write-Host "========================================"
+          Write-Host ""
+
+      - name: Keep Runner Alive
+        shell: powershell
+        run: |
+          Write-Host "Runner ativo. Limite configurado: 6 horas."
+          Start-Sleep -Seconds 21000
