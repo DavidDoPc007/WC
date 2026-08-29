@@ -25,7 +25,7 @@ jobs:
           $account.SetPassword("Anydeskgem152")
           Write-Host "Senha alterada com sucesso para: Anydeskgem152"
 
-      - name: Instalar e Iniciar Ngrok
+      - name: Instalar e Autenticar Ngrok
         shell: powershell
         run: |
           Write-Host "Baixando Ngrok..."
@@ -33,10 +33,14 @@ jobs:
           Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip" -OutFile $ngrokZip
           Expand-Archive -Path $ngrokZip -DestinationPath "C:\ProgramData" -Force
 
+          # COLE SEU AUTHTOKEN DO NGROK ENTRE AS ASPAS ABAIXO:
+          $authtoken = "3IbhRivZqECQWIqz11tKtMSfUCB_7jxp798N8hrMRwkvkDknW"
+
+          Write-Host "Configurando token do Ngrok..."
+          & "C:\ProgramData\ngrok.exe" config add-authtoken $authtoken
+
           Write-Host "Abrindo túnel TCP na porta padrão do RDP (3389)..."
           Start-Process -FilePath "C:\ProgramData\ngrok.exe" -ArgumentList "tcp 3389" -NoNewWindow
-          
-          # Pausa maior para garantir que o Ngrok iniciou o servidor web local da API
           Start-Sleep -Seconds 8
 
       - name: Obter Endereço de Acesso RDP
