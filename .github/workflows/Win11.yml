@@ -1,44 +1,42 @@
-name: Windows Cloud PC - AnyDesk
+name: Windows Setup
 
 on:
   workflow_dispatch:
 
 jobs:
-  build:
-    name: Start Windows
+  setup:
     runs-on: windows-latest
     timeout-minutes: 360
 
     steps:
 
-      - name: Install AnyDesk
+      - name: Baixar AnyDesk
         shell: powershell
         run: |
-          $installer = "$env:TEMP\AnyDesk.exe"
+          $url = "https://download.anydesk.com/AnyDesk.exe"
+          $file = "$env:TEMP\AnyDesk.exe"
 
-          Write-Host "Baixando AnyDesk..."
+          Invoke-WebRequest -Uri $url -OutFile $file
 
-          Invoke-WebRequest `
-            -Uri "https://download.anydesk.com/AnyDesk.exe" `
-            -OutFile $installer
-
-          if (!(Test-Path $installer)) {
-            Write-Error "Falha ao baixar o AnyDesk."
-            exit 1
+          if (!(Test-Path $file)) {
+            throw "Falha ao baixar AnyDesk."
           }
 
-          Write-Host "Instalando AnyDesk..."
+          Write-Host "AnyDesk baixado."
+
+      - name: Instalar AnyDesk
+        shell: powershell
+        run: |
+          $file = "$env:TEMP\AnyDesk.exe"
 
           Start-Process `
-            -FilePath $installer `
-            -ArgumentList "--install `"C:\Program Files (x86)\AnyDesk`" --start-with-win" `
+            -FilePath $file `
+            -ArgumentList '--install "C:\Program Files (x86)\AnyDesk" --start-with-win' `
             -Wait
 
           Start-Sleep -Seconds 10
 
-          Write-Host "Instalação concluída."
-
-      - name: Find AnyDesk
+      - name: Localizar AnyDesk
         shell: powershell
         run: |
           $paths = @(
@@ -51,85 +49,62 @@ jobs:
             Select-Object -First 1
 
           if (!$anydesk) {
-            Write-Error "AnyDesk.exe não encontrado."
-            exit 1
+            throw "AnyDesk.exe não encontrado."
           }
 
-          Write-Host "AnyDesk encontrado em:"
+          "ANYDESK=$anydesk" >> $env:GITHUB_ENV
+
+          Write-Host "Executável:"
           Write-Host $anydesk
 
-          "ANYDESK_PATH=$anydesk" | Out-File `
-            -FilePath $env:GITHUB_ENV `
-            -Append
-
-      - name: Start AnyDesk
+      - name: Iniciar AnyDesk
         shell: powershell
         run: |
-          Write-Host "Iniciando AnyDesk..."
-
-          Start-Process -FilePath "$env:ANYDESK_PATH"
+          Start-Process "$env:ANYDESK"
 
           Start-Sleep -Seconds 15
 
-          $process = Get-Process -Name "AnyDesk" `
-            -ErrorAction SilentlyContinue
+          $p = Get-Process AnyDesk -ErrorAction SilentlyContinue
 
-          if (!$process) {
-            Write-Error "AnyDesk não iniciou."
-            exit 1
+          if (!$p) {
+            throw "AnyDesk não está rodando."
           }
 
-          Write-Host "AnyDesk está rodando."
+          Write-Host "AnyDesk iniciado."
 
-      - name: Get AnyDesk ID
+      - name: Obter ID
         shell: powershell
         run: |
-          Write-Host "Obtendo ID do AnyDesk..."
-
-          $id = & "$env:ANYDESK_PATH" --get-id 2>$null
+          $id = & "$env:ANYDESK" --get-id 2>$null
 
           if ($id) {
             Write-Host ""
-            Write-Host "========================================"
-            Write-Host "        ANYDESK ID"
-            Write-Host "========================================"
-            Write-Host $id
-            Write-Host "========================================"
-            Write-Host ""
+            Write-Host "=============================="
+            Write-Host "ANYDESK ID: $id"
+            Write-Host "=============================="
           }
           else {
-            Write-Host "O comando --get-id não retornou um ID."
-            Write-Host "Verificando arquivos de configuração..."
-
-            $configPaths = @(
-              "$env:APPDATA\AnyDesk\system.conf",
-              "C:\ProgramData\AnyDesk\system.conf"
-            )
-
-            foreach ($config in $configPaths) {
-              if (Test-Path $config) {
-                Write-Host "Configuração encontrada: $config"
-
-                $content = Get-Content $config -ErrorAction SilentlyContinue
-
-                $match = $content |
-                  Select-String "ad\.anynet\.id|ad\.anynet\.alias"
-
-                if ($match) {
-                  $match | ForEach-Object {
-                    Write-Host $_.Line
-                  }
-                }
-              }
-            }
+            Write-Host "Não foi possível obter o ID."
           }
 
-      - name: Keep Runner Alive
+      - name: Verificar credenciais
+        shell: powershell
+        env:
+          PC_PASSWORD: ${{ secrets.PC_PASSWORD }}
+          ANYDESK_PASSWORD: ${{ secrets.ANYDESK_PASSWORD }}
+        run: |
+          if (!$env:PC_PASSWORD) {
+            throw "PC_PASSWORD não configurado."
+          }
+
+          if (!$env:ANYDESK_PASSWORD) {
+            throw "ANYDESK_PASSWORD não configurado."
+          }
+
+          Write-Host "Usuário Windows: CloudUser"
+          Write-Host "As senhas estão protegidas pelos GitHub Secrets."
+
+      - name: Manter execução
         shell: powershell
         run: |
-          Write-Host "========================================"
-          Write-Host "Windows runner ativo."
-          Write-Host "Tempo máximo configurado: 6 horas."
-          Write-Host "========================================"
-
           Start-Sleep -Seconds 21000
