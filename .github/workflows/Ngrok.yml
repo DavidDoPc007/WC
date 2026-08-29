@@ -1,78 +1,44 @@
-name: Windows Cloud PC - RDP Ngrok
+name: Windows Cloud PC - RustDesk
 
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    name: Start Windows RDP
+    name: Start Windows (RustDesk)
     runs-on: windows-latest
     timeout-minutes: 360
 
     steps:
-      - name: Ativar RDP no Windows
+      - name: Baixar e Instalar RustDesk
         shell: powershell
         run: |
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
-          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          Write-Host "RDP ativado com sucesso!"
+          $installer = "$env:TEMP\rustdesk.exe"
+          Write-Host "Baixando RustDesk..."
+          Invoke-WebRequest -Uri "https://github.com/rustdesk/rustdesk/releases/download/1.3.1/rustdesk-1.3.1-x86_64.exe" -OutFile $installer
+          
+          Write-Host "Instalando..."
+          Start-Process -FilePath $installer -ArgumentList "--silent-install" -Wait
+          Start-Sleep -Seconds 5
 
-      - name: Definir Senha do Administrador
+      - name: Configurar Senha e Obter ID
         shell: powershell
         run: |
-          $account = [adsi] "WinNT://$env:COMPUTERNAME/runneradmin,user"
-          $account.SetPassword("Anydeskgem152")
-          Write-Host "Senha alterada com sucesso para: Anydeskgem152"
+          $rustdesk = "C:\Program Files\RustDesk\rustdesk.exe"
+          & "$rustdesk" --password Anydeskgem152
+          Start-Sleep -Seconds 3
+          
+          $id = (& "$rustdesk" --get-id).Trim()
 
-      - name: Instalar e Autenticar Ngrok
-        shell: powershell
-        run: |
-          Write-Host "Baixando Ngrok..."
-          $ngrokZip = "$env:TEMP\ngrok.zip"
-          Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip" -OutFile $ngrokZip
-          Expand-Archive -Path $ngrokZip -DestinationPath "C:\ProgramData" -Force
-
-          # COLE SEU AUTHTOKEN DO NGROK ENTRE AS ASPAS ABAIXO:
-          $authtoken = "3IbhRivZqECQWIqz11tKtMSfUCB_7jxp798N8hrMRwkvkDknW"
-
-          Write-Host "Configurando token do Ngrok..."
-          & "C:\ProgramData\ngrok.exe" config add-authtoken $authtoken
-
-          Write-Host "Abrindo túnel TCP na porta padrão do RDP (3389)..."
-          Start-Process -FilePath "C:\ProgramData\ngrok.exe" -ArgumentList "tcp 3389" -NoNewWindow
-          Start-Sleep -Seconds 8
-
-      - name: Obter Endereço de Acesso RDP
-        shell: powershell
-        run: |
-          $tunnelUrl = $null
-          for ($i=1; $i -le 5; $i++) {
-            try {
-              $response = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels" -ErrorAction Stop
-              $tunnelUrl = $response.tunnels[0].public_url
-              if ($tunnelUrl) { break }
-            } catch {
-              Write-Host "Tentativa $i: Aguardando API do Ngrok..."
-              Start-Sleep -Seconds 3
-            }
-          }
-
-          if ($tunnelUrl) {
-            Write-Host ""
-            Write-Host "=================================================="
-            Write-Host " DADOS PARA CONEXÃO RDP:"
-            Write-Host " Endereço: $tunnelUrl"
-            Write-Host " Usuário: runneradmin"
-            Write-Host " Senha: Anydeskgem152"
-            Write-Host "=================================================="
-            Write-Host ""
-          } else {
-            Write-Host "Erro: Não foi possível obter a URL do Ngrok."
-          }
+          Write-Host ""
+          Write-Host "========================================"
+          Write-Host "          RUSTDESK ID: $id"
+          Write-Host "          SENHA: Anydeskgem152"
+          Write-Host "========================================"
+          Write-Host ""
 
       - name: Manter Runner Ativo
         shell: powershell
         run: |
-          Write-Host "PC na nuvem pronto e ativo por 6 horas."
-          Start-Sleep -Seconds 21000
+          Write-Host "Runner ativo."
+          Start-Sleep -Seconds 21000 
